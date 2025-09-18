@@ -11,6 +11,7 @@ model Message {
   id        String   @id @default(uuid())
   text      String
   userId    String
+  user      User     @relation(fields: [userId], references: [id])
   roomId    String   @default("global")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -25,4 +26,11 @@ model Room {
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  messages  Message[]
+  createdAt DateTime  @default(now())
 }

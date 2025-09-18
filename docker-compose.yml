@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  chat-service:
+    build: .
+    ports:
+      - '3002:3002'
+    environment:
+      - PORT=3002
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://postgres:Pos%233014708@postgres:5432/chat
+      - REDIS_URL=redis://redis:6379
+      - KAFKA_BROKER=kafka:9094
+      - JWT_SECRET=01aee198bd1475f54ba9fbc7663430a8e659d8755b550fcb322008f0f66d3719
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3002
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - '5432:5432'
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=Pos#3014708
+      - POSTGRES_DB=chat
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6380:6379'
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.0
+    ports:
+      - '2181:2181'
+    environment:
+      - ZOOKEEPER_CLIENT_PORT=2181
+      - ZOOKEEPER_TICK_TIME=2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.3.0
+    ports:
+      - '9094:9094'
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,OUTSIDE://localhost:9094
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,OUTSIDE:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+    depends_on:
+      - zookeeper
+
+volumes:
+  postgres-data:
+  redis-data:

@@ -1,7 +1,9 @@
+// src/index.ts
 import dotenv from 'dotenv';
 import { server, initializeServices } from './app';
 import { logger } from './utils/logger';
 import { RedisClient } from './config/redis';
+import { KafkaService } from './services/kafka-service';
 
 dotenv.config();
 
@@ -20,16 +22,41 @@ initializeServices().catch((error) => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', async () => {
-  logger.info('SIGTERM signal received: closing HTTP server');
-  server.close(() => {
-    logger.info('HTTP server closed');
-  });
+const gracefulShutdown = async (signal: string) => {
+  logger.info(`${signal} signal received: starting graceful shutdown`);
 
-  // Disconnect from services
-  const { KafkaService } = require('./services/kafka-service');
+  try {
+    // Close HTTP server
+    server.close(() => {
+      logger.info('HTTP server closed');
+    });
 
-  await RedisClient.getInstance().disconnect();
-  await KafkaService.getInstance().disconnect();
-  process.exit(0);
+    // Disconnect from services
+    logger.info('Disconnecting from services...');
+
+    const kafkaService = KafkaService.getInstance();
+    await kafkaService.disconnect();
+
+    await RedisClient.closeConnection();
+
+    logger.info('Graceful shutdown completed');
+    process.exit(0);
+  } catch (error) {
+    logger.error('Error during graceful shutdown:', error);
+    process.exit(1);
+  }
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', error);
+  gracefulShutdown('UNCAUGHT_EXCEPTION');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('UNHANDLED_REJECTION');
 });

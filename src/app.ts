@@ -72,19 +72,61 @@ app.get('/health', (req, res) => {
 app.use(Sentry.Handlers.errorHandler());
 app.use(errorHandler);
 
+// Utility function to wait for a service
+async function waitForService(
+  serviceName: string,
+  checkFn: () => Promise<boolean>,
+  maxRetries: number = 30,
+  retryDelay: number = 2000,
+): Promise<void> {
+  let retries = 0;
+
+  while (retries < maxRetries) {
+    try {
+      const isReady = await checkFn();
+      if (isReady) {
+        logger.info(`${serviceName} is ready`);
+        return;
+      }
+    } catch (error: any) {
+      logger.debug(`${serviceName} not ready yet:`, error.message);
+    }
+
+    retries++;
+    logger.info(
+      `Waiting for ${serviceName} (attempt ${retries}/${maxRetries})`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, retryDelay));
+  }
+
+  throw new Error(
+    `${serviceName} did not become ready after ${maxRetries} attempts`,
+  );
+}
+
 // Initialize services
 async function initializeServices() {
   try {
-    // Initialize Redis
-    const redisService = RedisClient.getInstance();
-    await redisService.connect();
+    logger.info('Starting service initialization...');
 
-    // Initialize Kafka
+    // Step 1: Initialize Redis
+    logger.info('1/4 - Connecting to Redis...');
+    await RedisClient.connect();
+
+    // Wait for Redis to be ready
+    await waitForService('Redis', () => RedisClient.ping(), 10, 1000);
+
+    // Step 2: Initialize Kafka (with retry logic built into KafkaService)
+    logger.info('2/4 - Connecting to Kafka...');
     const kafkaService = KafkaService.getInstance();
     await kafkaService.connect();
+
+    // Wait a bit more and start consumer
+    logger.info('3/4 - Starting Kafka consumer...');
     await kafkaService.startConsumer();
 
-    // Initialize Socket.io
+    // Step 3: Initialize Socket.io
+    logger.info('4/4 - Initializing Socket.IO...');
     const io = new Server(server, {
       cors: {
         origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
@@ -97,8 +139,10 @@ async function initializeServices() {
 
     const socketService = new SocketService(io);
     socketService.initListeners();
+
+    logger.info('✅ All services initialized successfully');
   } catch (error) {
-    logger.error('Failed to initialize services:', error);
+    logger.error('❌ Failed to initialize services:', error);
     throw error;
   }
 }

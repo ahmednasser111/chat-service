@@ -14,6 +14,7 @@ class RedisClient {
       RedisClient.instance = new Redis(config.REDIS_URL, {
         retryStrategy: (times: number) => Math.min(times * 50, 2000),
         maxRetriesPerRequest: 3,
+        lazyConnect: true, // Don't connect immediately
       });
       RedisClient.setupEventListeners(RedisClient.instance, 'main');
     }
@@ -25,6 +26,7 @@ class RedisClient {
       RedisClient.subClient = new Redis(config.REDIS_URL, {
         retryStrategy: (times: number) => Math.min(times * 50, 2000),
         maxRetriesPerRequest: 3,
+        lazyConnect: true, // Don't connect immediately
       });
       RedisClient.setupEventListeners(RedisClient.subClient, 'subscriber');
     }
@@ -32,20 +34,59 @@ class RedisClient {
   }
 
   private static setupEventListeners(client: Redis, type: string): void {
-    client.on('connect', () => logger.info(`Redis (${type}) connected`));
+    client.on('connect', () => {
+      logger.info(`Redis (${type}) connected`);
+      if (type === 'main') {
+        RedisClient.isConnected = true;
+      }
+    });
     client.on('ready', () => logger.info(`Redis (${type}) ready`));
-    client.on('error', (err) => logger.error(`Redis (${type}) error:`, err));
-    client.on('close', () => logger.warn(`Redis (${type}) connection closed`));
+    client.on('error', (err) => {
+      logger.error(`Redis (${type}) error:`, err);
+      if (type === 'main') {
+        RedisClient.isConnected = false;
+      }
+    });
+    client.on('close', () => {
+      logger.warn(`Redis (${type}) connection closed`);
+      if (type === 'main') {
+        RedisClient.isConnected = false;
+      }
+    });
     client.on('reconnecting', () =>
       logger.info(`Redis (${type}) reconnecting...`),
     );
-    client.on('end', () => logger.info(`Redis (${type}) connection ended`));
+    client.on('end', () => {
+      logger.info(`Redis (${type}) connection ended`);
+      if (type === 'main') {
+        RedisClient.isConnected = false;
+      }
+    });
+  }
+
+  // New method to explicitly connect
+  public static async connect(): Promise<void> {
+    try {
+      const client = RedisClient.getInstance();
+      if (client.status !== 'ready' && client.status !== 'connect') {
+        await client.connect();
+        logger.info('Redis main client connected');
+      }
+    } catch (error) {
+      logger.error('Failed to connect Redis main client:', error);
+      throw error;
+    }
   }
 
   public static async closeConnection() {
     try {
-      if (RedisClient.instance) await RedisClient.instance.quit();
-      if (RedisClient.subClient) await RedisClient.subClient.quit();
+      if (RedisClient.instance) {
+        await RedisClient.instance.quit();
+      }
+      if (RedisClient.subClient) {
+        await RedisClient.subClient.quit();
+      }
+      RedisClient.isConnected = false;
       logger.info('Redis connections closed');
     } catch (error) {
       logger.error('Error closing Redis connections:', error);
@@ -82,6 +123,7 @@ class RedisClient {
       await client.publish(channel, message);
     } catch (error) {
       logger.error('Redis publish error:', error);
+      throw error;
     }
   }
 
@@ -91,6 +133,11 @@ class RedisClient {
   ) {
     const client = RedisClient.getSubscriber();
     try {
+      // Connect subscriber if not connected
+      if (client.status !== 'ready' && client.status !== 'connect') {
+        await client.connect();
+      }
+
       await client.subscribe(channel);
       client.on('message', (ch, message) => {
         if (ch === channel) callback(message);
@@ -98,6 +145,7 @@ class RedisClient {
       logger.info(`Subscribed to Redis channel: ${channel}`);
     } catch (error) {
       logger.error('Redis subscribe error:', error);
+      throw error;
     }
   }
 }

@@ -13,7 +13,7 @@
 		"docs:generate": "ts-node src/utils/swagger.ts"
 	},
 	"dependencies": {
-		"@prisma/client": "^5.7.0",
+		"@prisma/client": "^6.16.2",
 		"@sentry/node": "^7.91.0",
 		"bcryptjs": "^2.4.3",
 		"compression": "^1.8.1",

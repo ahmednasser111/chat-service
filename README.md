@@ -1,4 +1,4 @@
-# 🚀 Scalable Chat Microservices
+# 🚀 Chat Microservices
 
 A production-ready chat application built with microservices architecture, featuring real-time messaging, user authentication, and event-driven communication.
 

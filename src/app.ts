@@ -12,6 +12,7 @@ import { logger } from './utils/logger';
 import { setupSwagger } from './utils/swagger';
 import messageRoutes from './routes/message.route';
 import userRoutes from './routes/user.route';
+import roomRoutes from './routes/room.route';
 import { SocketService } from './services/socket-service';
 import { KafkaService } from './services/kafka-service';
 import { authenticateSocket } from './middleware/socketAuth';
@@ -42,14 +43,16 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: 1000, // increased limit for chat application
   message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use('/api/', limiter);
 
@@ -60,17 +63,59 @@ setupSwagger(app);
 app.use('/', indexRouter);
 app.use('/api/messages', messageRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/rooms', roomRoutes);
 
 // Health check
-app.get('/health', (req, res) => {
-  res
-    .status(200)
-    .json({ status: 'healthy', timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+  const health = {
+    service: 'chat-service',
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    checks: {
+      database: 'unknown',
+      redis: 'unknown',
+      kafka: 'unknown',
+    },
+  };
+
+  try {
+    // Check database (Prisma doesn't have a direct ping method)
+    await prisma.$queryRaw`SELECT 1`;
+    health.checks.database = 'connected';
+  } catch (error) {
+    health.checks.database = 'error';
+    health.status = 'degraded';
+  }
+
+  try {
+    await RedisClient.ping();
+    health.checks.redis = 'connected';
+  } catch (error) {
+    health.checks.redis = 'error';
+    health.status = 'degraded';
+  }
+
+  try {
+    const kafkaService = KafkaService.getInstance();
+    health.checks.kafka = kafkaService.isHealthy() ? 'connected' : 'error';
+    if (!kafkaService.isHealthy()) {
+      health.status = 'degraded';
+    }
+  } catch (error) {
+    health.checks.kafka = 'error';
+    health.status = 'degraded';
+  }
+
+  const statusCode = health.status === 'healthy' ? 200 : 503;
+  res.status(statusCode).json(health);
 });
 
 // Error handling
 app.use(Sentry.Handlers.errorHandler());
 app.use(errorHandler);
+
+// Import prisma after routes to avoid circular dependency
+import prisma from './config/prisma';
 
 // Utility function to wait for a service
 async function waitForService(
@@ -109,29 +154,36 @@ async function initializeServices() {
   try {
     logger.info('Starting service initialization...');
 
-    // Step 1: Initialize Redis
-    logger.info('1/4 - Connecting to Redis...');
+    // Step 1: Initialize Database
+    logger.info('1/4 - Connecting to Database...');
+    await prisma.$connect();
+    logger.info('Database connected');
+
+    // Step 2: Initialize Redis
+    logger.info('2/4 - Connecting to Redis...');
     await RedisClient.connect();
 
     // Wait for Redis to be ready
     await waitForService('Redis', () => RedisClient.ping(), 10, 1000);
 
-    // Step 2: Initialize Kafka (with retry logic built into KafkaService)
-    logger.info('2/4 - Connecting to Kafka...');
+    // Step 3: Initialize Kafka (with retry logic built into KafkaService)
+    logger.info('3/4 - Connecting to Kafka...');
     const kafkaService = KafkaService.getInstance();
     await kafkaService.connect();
 
     // Wait a bit more and start consumer
-    logger.info('3/4 - Starting Kafka consumer...');
+    logger.info('Starting Kafka consumer...');
     await kafkaService.startConsumer();
 
-    // Step 3: Initialize Socket.io
+    // Step 4: Initialize Socket.io
     logger.info('4/4 - Initializing Socket.IO...');
     const io = new Server(server, {
       cors: {
         origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
         credentials: true,
       },
+      pingTimeout: 60000,
+      pingInterval: 25000,
     });
 
     // Socket authentication middleware

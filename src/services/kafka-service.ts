@@ -1,6 +1,6 @@
 import { Kafka, Producer, Consumer, EachMessagePayload } from 'kafkajs';
 import { logger } from '../utils/logger';
-import prismaClient from '../config/database';
+import prisma from '../config/prisma';
 
 export class KafkaService {
   private static instance: KafkaService;
@@ -11,7 +11,7 @@ export class KafkaService {
 
   private constructor() {
     this.kafka = new Kafka({
-      clientId: 'chat-backend',
+      clientId: 'chat-service',
       brokers: [process.env.KAFKA_BROKER || 'localhost:9094'],
       connectionTimeout: 10000,
       requestTimeout: 30000,
@@ -64,7 +64,7 @@ export class KafkaService {
         });
 
         this.consumer = this.kafka.consumer({
-          groupId: 'chat-group',
+          groupId: 'chat-service-group',
           sessionTimeout: 30000,
           heartbeatInterval: 3000,
         });
@@ -126,7 +126,7 @@ export class KafkaService {
         topic,
         messages: [
           {
-            key: `message-${Date.now()}-${Math.random()}`,
+            key: `${topic}-${Date.now()}-${Math.random()}`,
             value: JSON.stringify(message),
           },
         ],
@@ -144,53 +144,55 @@ export class KafkaService {
     }
 
     try {
-      await this.consumer.subscribe({
-        topic: 'MESSAGES',
-        fromBeginning: false,
-      });
+      // Subscribe to multiple topics
+      const topics = [
+        'MESSAGES',
+        'MESSAGE_UPDATED',
+        'MESSAGE_DELETED',
+        'user.registered', // Listen to auth service events
+        'USER_CREATED',
+        'ROOM_CREATED',
+        'ROOM_UPDATED',
+        'ROOM_DELETED',
+      ];
+
+      for (const topic of topics) {
+        await this.consumer.subscribe({
+          topic,
+          fromBeginning: false,
+        });
+      }
 
       await this.consumer.run({
-        eachMessage: async ({ message, pause }: EachMessagePayload) => {
+        eachMessage: async ({ topic, message, pause }: EachMessagePayload) => {
           try {
             if (!message.value) {
-              logger.warn('Received empty Kafka message');
+              logger.warn(`Received empty Kafka message from topic: ${topic}`);
               return;
             }
 
             const messageData = JSON.parse(message.value.toString());
-            logger.debug('Processing message from Kafka:', messageData);
+            logger.debug(
+              `Processing message from Kafka topic ${topic}:`,
+              messageData,
+            );
 
-            // Validate message data before saving
-            if (!messageData.text || !messageData.userId) {
-              logger.error('Invalid message data from Kafka:', messageData);
-              return;
-            }
-
-            // Save to database - Note: This might create duplicates if the message was already saved via REST API
-            // You might want to implement idempotency here
-            await prismaClient.message.upsert({
-              where: {
-                id: messageData.id || `${messageData.userId}-${Date.now()}`,
-              },
-              update: {},
-              create: {
-                id: messageData.id,
-                text: messageData.text,
-                userId: messageData.userId,
-                roomId: messageData.roomId || 'global',
-              },
-            });
-
-            logger.debug('Message processed and saved to database');
+            // Route message to appropriate handler
+            await this.handleMessage(topic, messageData);
           } catch (error) {
-            logger.error('Error processing Kafka message:', error);
+            logger.error(
+              `Error processing Kafka message from topic ${topic}:`,
+              error,
+            );
 
             // Pause consumer for 30 seconds on error to prevent rapid error loops
             pause();
             setTimeout(() => {
               try {
-                this.consumer?.resume([{ topic: 'MESSAGES' }]);
-                logger.info('Kafka consumer resumed after error');
+                this.consumer?.resume([{ topic }]);
+                logger.info(
+                  `Kafka consumer resumed for topic ${topic} after error`,
+                );
               } catch (resumeError) {
                 logger.error('Error resuming Kafka consumer:', resumeError);
               }
@@ -203,6 +205,174 @@ export class KafkaService {
     } catch (error) {
       logger.error('Error starting Kafka consumer:', error);
       throw error;
+    }
+  }
+
+  private async handleMessage(topic: string, messageData: any): Promise<void> {
+    switch (topic) {
+      case 'MESSAGES':
+        await this.handleNewMessage(messageData);
+        break;
+
+      case 'MESSAGE_UPDATED':
+        await this.handleMessageUpdate(messageData);
+        break;
+
+      case 'MESSAGE_DELETED':
+        await this.handleMessageDeletion(messageData);
+        break;
+
+      case 'user.registered':
+        await this.handleUserRegistered(messageData);
+        break;
+
+      case 'USER_CREATED':
+        await this.handleUserCreated(messageData);
+        break;
+
+      case 'ROOM_CREATED':
+        await this.handleRoomCreated(messageData);
+        break;
+
+      case 'ROOM_UPDATED':
+        await this.handleRoomUpdated(messageData);
+        break;
+
+      case 'ROOM_DELETED':
+        await this.handleRoomDeleted(messageData);
+        break;
+
+      default:
+        logger.warn(`Unhandled Kafka topic: ${topic}`);
+    }
+  }
+
+  private async handleNewMessage(messageData: any): Promise<void> {
+    try {
+      // Validate message data
+      if (!messageData.text || !messageData.userId) {
+        logger.error('Invalid message data from Kafka:', messageData);
+        return;
+      }
+
+      // Check if message already exists (idempotency)
+      if (messageData.id) {
+        const existingMessage = await prisma.message.findUnique({
+          where: { id: messageData.id },
+        });
+
+        if (existingMessage) {
+          logger.debug(
+            `Message ${messageData.id} already exists, skipping creation`,
+          );
+          return;
+        }
+      }
+
+      // This is mainly for messages created via Socket.IO
+      // REST API messages are already saved, so we need to avoid duplicates
+      logger.debug('New message processed via Kafka');
+    } catch (error) {
+      logger.error('Error handling new message:', error);
+    }
+  }
+
+  private async handleMessageUpdate(messageData: any): Promise<void> {
+    try {
+      logger.info(`Message updated: ${messageData.id}`);
+      // Additional processing for message updates can be added here
+    } catch (error) {
+      logger.error('Error handling message update:', error);
+    }
+  }
+
+  private async handleMessageDeletion(messageData: any): Promise<void> {
+    try {
+      logger.info(`Message deleted: ${messageData.messageId}`);
+      // Additional processing for message deletions can be added here
+    } catch (error) {
+      logger.error('Error handling message deletion:', error);
+    }
+  }
+
+  private async handleUserRegistered(messageData: any): Promise<void> {
+    try {
+      // Extract user data from auth service registration event
+      const userData = messageData.value || messageData;
+
+      if (!userData.id || !userData.email) {
+        logger.error(
+          'Invalid user registration data from auth service:',
+          userData,
+        );
+        return;
+      }
+
+      // Check if user already exists in chat database
+      const existingUser = await prisma.user.findUnique({
+        where: { id: userData.id.toString() },
+      });
+
+      if (existingUser) {
+        logger.debug(`User ${userData.id} already exists in chat service`);
+        return;
+      }
+
+      // Create user in chat service database
+      const user = await prisma.user.create({
+        data: {
+          id: userData.id.toString(),
+          email: userData.email,
+        },
+      });
+
+      logger.info(
+        `User created in chat service from auth registration: ${user.id}`,
+      );
+    } catch (error) {
+      logger.error('Error handling user registration event:', error);
+    }
+  }
+
+  private async handleUserCreated(messageData: any): Promise<void> {
+    try {
+      logger.info(`User created in chat service: ${messageData.id}`);
+      // Additional processing for user creation can be added here
+    } catch (error) {
+      logger.error('Error handling user creation:', error);
+    }
+  }
+
+  private async handleRoomCreated(messageData: any): Promise<void> {
+    try {
+      logger.info(
+        `Room created: ${messageData.id} by user ${messageData.createdBy}`,
+      );
+      // Additional processing for room creation can be added here
+    } catch (error) {
+      logger.error('Error handling room creation:', error);
+    }
+  }
+
+  private async handleRoomUpdated(messageData: any): Promise<void> {
+    try {
+      logger.info(
+        `Room updated: ${messageData.id} by user ${messageData.updatedBy}`,
+      );
+      // Additional processing for room updates can be added here
+    } catch (error) {
+      logger.error('Error handling room update:', error);
+    }
+  }
+
+  private async handleRoomDeleted(messageData: any): Promise<void> {
+    try {
+      logger.info(
+        `Room deleted: ${messageData.roomId} by user ${messageData.deletedBy}`,
+      );
+      // Additional processing for room deletion can be added here
+    } catch (error) {
+      logger.error('Error handling room deletion:', error);
     }
   }
 

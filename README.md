@@ -1,479 +1,466 @@
-# Auth Service Microservice
+# 🚀 Scalable Chat Microservices
 
-A production-ready authentication and authorization microservice built with Node.js, TypeScript, PostgreSQL, Redis, and Kafka.
+A production-ready chat application built with microservices architecture, featuring real-time messaging, user authentication, and event-driven communication.
 
-## 🚀 Features
+## 🏗️ Architecture Overview
 
-- **User Registration & Authentication**: Secure user registration and JWT-based authentication
-- **Token Management**: JWT tokens with Redis-based session management
-- **Password Security**: Bcrypt hashing for password storage
-- **Event-Driven Architecture**: Kafka integration for publishing auth events
-- **Monitoring**: Sentry integration for error tracking and performance monitoring
-- **API Documentation**: Swagger/OpenAPI documentation
-- **Health Checks**: Comprehensive health check endpoints
-- **Security**: Helmet.js for security headers, CORS configuration
-- **Logging**: Winston logger with configurable log levels
-- **Graceful Shutdown**: Proper cleanup of connections on shutdown
-- **Docker Support**: Full Docker and Docker Compose setup
-
-## 📋 Prerequisites
-
-- Node.js 18+
-- PostgreSQL 15+
-- Redis 7+
-- Apache Kafka (or Docker)
-- npm or yarn
-
-## 🛠️ Technology Stack
-
-- **Runtime**: Node.js with TypeScript
-- **Framework**: Express.js 5
-- **Database**: PostgreSQL with TypeORM
-- **Cache**: Redis with ioredis
-- **Message Broker**: Apache Kafka with KafkaJS
-- **Authentication**: JWT (jsonwebtoken)
-- **Validation**: Zod
-- **Documentation**: Swagger/OpenAPI
-- **Monitoring**: Sentry
-- **Security**: Helmet, CORS, bcrypt
-- **Logging**: Winston
-- **Testing**: Jest
-- **Linting**: ESLint with Prettier
-
-## 📦 Installation
-
-### Local Development
-
-1. Clone the repository:
-
-```bash
-git clone https://github.com/yourusername/auth-service.git
-cd auth-service
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│   Frontend  │    │ API Gateway │    │   Client    │
+│   (React)   │◄──►│   (Kong)   │◄──►│  (Mobile)   │
+└─────────────┘    └─────────────┘    └─────────────┘
+                           │
+              ┌────────────┼────────────┐
+              ▼            ▼            ▼
+      ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+      │ Auth Service│ │Chat Service │ │Other Services│
+      │   :3001     │ │   :3002     │ │   :300X     │
+      └─────────────┘ └─────────────┘ └─────────────┘
+              │            │            │
+              └────────────┼────────────┘
+                           │
+           ┌───────────────┼───────────────┐
+           ▼               ▼               ▼
+    ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+    │ PostgreSQL  │ │    Redis    │ │   Kafka     │
+    │ (Auth DB)   │ │  (Cache)    │ │ (Events)    │
+    └─────────────┘ └─────────────┘ └─────────────┘
+           │
+    ┌─────────────┐
+    │ PostgreSQL  │
+    │ (Chat DB)   │
+    └─────────────┘
 ```
 
-2. Install dependencies:
+## 🎯 Features
+
+### Auth Service
+
+- ✅ User registration & authentication
+- ✅ JWT token management with Redis
+- ✅ Password security with bcrypt
+- ✅ Event publishing via Kafka
+- ✅ Comprehensive API documentation
+- ✅ Health checks & monitoring
+- ✅ Sentry error tracking
+
+### Chat Service
+
+- ✅ Real-time messaging with Socket.IO
+- ✅ Room/channel management
+- ✅ Message persistence
+- ✅ User presence tracking
+- ✅ Event-driven architecture
+- ✅ Redis pub/sub for scaling
+- ✅ Kafka integration for events
+
+### Infrastructure
+
+- ✅ Docker containerization
+- ✅ PostgreSQL databases (separate for each service)
+- ✅ Redis for caching and pub/sub
+- ✅ Apache Kafka for event streaming
+- ✅ Kong API Gateway
+- ✅ Health monitoring
+- ✅ Development tools (Kafka UI, Redis Commander)
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Docker & Docker Compose
+- Node.js 18+ (for local development)
+- Git
+
+### 1. Clone & Setup
 
 ```bash
-npm install
-```
+# Clone the repository
+git clone <repository-url>
+cd scalable-chat-microservices
 
-3. Copy environment variables:
-
-```bash
+# Copy environment files
+cp auth-service/.env.example auth-service/.env
 cp .env.example .env
+
+# Update environment variables as needed
 ```
 
-4. Update `.env` with your configuration:
-
-```env
-PORT=3001
-NODE_ENV=development
-
-DATABASE_URL=postgres://admin:pass@localhost:5432/auth
-REDIS_URL=redis://:pass@localhost:6379
-KAFKA_BROKER=localhost:9092
-
-JWT_SECRET=your-secret-key-here
-JWT_EXPIRES_IN=24h
-
-LOG_LEVEL=debug
-
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
-
-# Optional: Sentry Configuration
-SENTRY_DSN=your-sentry-dsn-here
-SENTRY_ENVIRONMENT=development
-```
-
-5. Start services (PostgreSQL, Redis, Kafka):
-
-```bash
-# Using Docker Compose (recommended)
-docker-compose up -d postgres redis kafka zookeeper
-
-# Or install and run them locally
-```
-
-6. Run the application:
-
-```bash
-# Development mode with hot reload
-npm run dev
-
-# Production mode
-npm run build
-npm start
-```
-
-### Docker Deployment
-
-1. Build and run with Docker Compose:
+### 2. Start with Docker Compose
 
 ```bash
 # Start all services
 docker-compose up -d
 
-# View logs
-docker-compose logs -f auth-service
-
-# Stop services
-docker-compose down
-```
-
-2. For development with Kafka UI:
-
-```bash
+# With development tools (Kafka UI, Redis Commander)
 docker-compose --profile dev up -d
+
+# With API Gateway
+docker-compose --profile gateway up -d
+
+# Start everything
+docker-compose --profile dev --profile gateway up -d
 ```
 
-3. For production with Nginx:
+### 3. Verify Services
 
 ```bash
-docker-compose --profile production up -d
+# Check service health
+curl http://localhost:3001/health  # Auth Service
+curl http://localhost:3002/health  # Chat Service
+curl http://localhost:8080/health  # API Gateway (if enabled)
 ```
 
-## 🔑 API Endpoints
+## 📡 API Endpoints
 
-### Base URL
-
-- Local: `http://localhost:3001`
-
-### Public Endpoints
-
-#### Health Check
+### Auth Service (Port 3001)
 
 ```http
-GET /health
+POST /api/v1/auth/register    # User registration
+POST /api/v1/auth/login       # User login
+POST /api/v1/auth/logout      # User logout (protected)
+GET  /health                  # Health check
+GET  /docs                    # API documentation
 ```
 
-Response:
-
-```json
-{
-  "service": "auth-service",
-  "status": "ok",
-  "timestamp": "2024-01-01T12:00:00.000Z",
-  "checks": {
-    "database": "connected",
-    "redis": "connected",
-    "sentry": "configured"
-  }
-}
-```
-
-#### Service Info
+### Chat Service (Port 3002)
 
 ```http
-GET /
+# Messages
+GET    /api/messages                    # Get messages
+POST   /api/messages                    # Send message
+PUT    /api/messages/{id}               # Update message
+DELETE /api/messages/{id}               # Delete message
+GET    /api/messages/room/{roomId}      # Get room messages
+
+# Rooms
+GET    /api/rooms                       # Get rooms
+POST   /api/rooms                       # Create room
+GET    /api/rooms/{id}                  # Get room details
+PUT    /api/rooms/{id}                  # Update room
+DELETE /api/rooms/{id}                  # Delete room
+GET    /api/rooms/{id}/messages         # Get room messages
+
+# Users
+GET    /api/users/me                    # Get current user
+GET    /api/users/{id}                  # Get user by ID
+GET    /api/users                       # Get all users
+GET    /api/users/status                # Get user status
+
+# Health & Docs
+GET    /health                          # Health check
+GET    /docs                            # API documentation
 ```
 
-### Authentication Endpoints
-
-#### Register User
+### API Gateway (Port 8080)
 
 ```http
-POST /api/v1/auth/register
-Content-Type: application/json
-
-{
-  "firstName": "John",
-  "lastName": "Doe",
-  "email": "john.doe@example.com",
-  "password": "SecurePassword123!"
-}
+# Routes all requests to appropriate services
+POST /api/v1/auth/*          # → Auth Service
+GET  /api/*                  # → Chat Service
+WS   /socket.io/*            # → Chat Service (WebSocket)
+GET  /auth/health            # → Auth Service Health
+GET  /chat/health            # → Chat Service Health
 ```
 
-Response (201 Created):
+## 🔌 WebSocket Events
 
-```json
-{
-  "id": 1,
-  "firstName": "John",
-  "lastName": "Doe",
-  "email": "john.doe@example.com",
-  "createdAt": "2024-01-01T12:00:00.000Z",
-  "updatedAt": "2024-01-01T12:00:00.000Z"
-}
+### Client → Server
+
+```javascript
+// Authentication (required)
+socket.auth = { token: 'your-jwt-token' };
+
+// Join/Leave rooms
+socket.emit('join:room', 'room-id');
+socket.emit('leave:room', 'room-id');
+
+// Send messages
+socket.emit('message:send', {
+  text: 'Hello world!',
+  roomId: 'room-id', // optional, defaults to 'global'
+});
+
+// Typing indicators
+socket.emit('typing:start', { roomId: 'room-id' });
+socket.emit('typing:stop', { roomId: 'room-id' });
+
+// Get online users
+socket.emit('users:online');
 ```
 
-#### Login
+### Server → Client
 
-```http
-POST /api/v1/auth/login
-Content-Type: application/json
+```javascript
+// New messages
+socket.on('message:new', (message) => {
+  console.log('New message:', message);
+});
 
-{
-  "email": "john.doe@example.com",
-  "password": "SecurePassword123!"
-}
+// Message updates/deletions
+socket.on('message:updated', (message) => {});
+socket.on('message:deleted', (data) => {});
+
+// User events
+socket.on('user:joined', (data) => {});
+socket.on('user:left', (data) => {});
+socket.on('user:status', (data) => {});
+socket.on('users:online:list', (data) => {});
+
+// Typing indicators
+socket.on('typing:user', (data) => {
+  console.log(`${data.userId} is ${data.isTyping ? 'typing' : 'not typing'}`);
+});
+
+// Errors
+socket.on('error', (error) => {
+  console.error('Socket error:', error);
+});
 ```
 
-Response (200 OK):
+## 🌐 Development
 
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "firstName": "John",
-  "lastName": "Doe",
-  "email": "john.doe@example.com"
-}
-```
+### Local Development Setup
 
-#### Logout (Protected)
-
-```http
-POST /api/v1/auth/logout
-Authorization: Bearer {token}
-```
-
-Response (200 OK):
-
-```json
-{
-  "message": "logged out successfully"
-}
-```
-
-## 📚 API Documentation
-
-Swagger documentation is available at:
-
-- Local: http://localhost:3001/docs
-
-## 🔒 Authentication
-
-The service uses JWT tokens for authentication. Include the token in the Authorization header:
-
-```http
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-Tokens expire after 24 hours by default (configurable via `JWT_EXPIRES_IN`).
-
-## 📊 Events
-
-The service publishes the following Kafka events:
-
-### user.registered
-
-Published when a new user successfully registers:
-
-```json
-{
-  "key": "userId",
-  "value": {
-    "id": 1,
-    "firstName": "John",
-    "lastName": "Doe",
-    "email": "john.doe@example.com",
-    "createdAt": "2024-01-01T12:00:00.000Z"
-  }
-}
-```
-
-## 🧪 Testing
-
-Run tests:
+#### Auth Service
 
 ```bash
-# Run all tests
-npm test
-
-# Run tests with coverage
-npm run test:coverage
-
-# Run tests in watch mode
-npm run test:watch
+cd auth-service
+npm install
+npm run dev
 ```
 
-## 🔧 Development
-
-### Code Quality
+#### Chat Service
 
 ```bash
-# Run linter
-npm run lint
+npm install
+npm run dev
+```
 
-# Format code
-npm run format
+### Environment Variables
 
-# Type checking
-npm run type-check
+#### Auth Service (.env)
+
+```env
+PORT=3001
+NODE_ENV=development
+DATABASE_URL=postgres://postgres:Pos#3014708@localhost:5433/authdb
+REDIS_URL=redis://localhost:6379
+KAFKA_BROKER=localhost:9094
+JWT_SECRET=your-secret-key
+JWT_EXPIRES_IN=24h
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+SENTRY_DSN=your-sentry-dsn
+```
+
+#### Chat Service (.env)
+
+```env
+PORT=3002
+NODE_ENV=development
+DATABASE_URL=postgres://postgres:Pos#3014708@localhost:5434/chatdb
+REDIS_URL=redis://localhost:6379
+KAFKA_BROKER=localhost:9094
+JWT_SECRET=your-secret-key
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+SENTRY_DSN=your-sentry-dsn
 ```
 
 ### Database Migrations
 
-TypeORM is configured with synchronize for development. For production, use migrations:
+#### Auth Service (TypeORM)
 
 ```bash
-# Generate migration
+cd auth-service
 npm run typeorm migration:generate -- -n MigrationName
-
-# Run migrations
 npm run typeorm migration:run
-
-# Revert migration
-npm run typeorm migration:revert
 ```
 
-## 📈 Monitoring
-
-### Sentry Integration
-
-The service includes Sentry integration for:
-
-- Error tracking
-- Performance monitoring
-- Release tracking
-- Custom breadcrumbs for auth events
-
-Configure Sentry by setting the `SENTRY_DSN` environment variable.
-
-### Health Monitoring
-
-The `/health` endpoint provides:
-
-- Database connectivity status
-- Redis connectivity status
-- Sentry configuration status
-- Service uptime
-
-## 🚦 Error Handling
-
-The service uses consistent error responses:
-
-```json
-{
-  "status": "error",
-  "message": "Error description",
-  "errors": [] // Optional validation errors
-}
-```
-
-HTTP Status Codes:
-
-- `200` - Success
-- `201` - Created
-- `400` - Bad Request
-- `401` - Unauthorized
-- `403` - Forbidden
-- `404` - Not Found
-- `500` - Internal Server Error
-- `503` - Service Unavailable
-
-## 🔐 Security
-
-- **Password Hashing**: Bcrypt with 10 rounds
-- **JWT Security**: Configurable secret and expiration
-- **Helmet.js**: Security headers
-- **CORS**: Configurable origins
-- **Input Validation**: Zod schemas
-- **SQL Injection Protection**: TypeORM parameterized queries
-- **Rate Limiting**: Redis-based token validation
-- **Environment Variables**: Sensitive data in .env files
-
-## 🐳 Docker
-
-### Building the Image
+#### Chat Service (Prisma)
 
 ```bash
-# Build production image
-docker build -t auth-service:latest .
-
-# Build with build args
-docker build \
-  --build-arg NODE_ENV=production \
-  -t auth-service:latest .
+npm run db:migrate
+npm run db:generate
 ```
 
-### Running the Container
+## 🧪 Testing
+
+### API Testing with cURL
+
+#### Register & Login
 
 ```bash
-# Run with environment variables
-docker run -d \
-  --name auth-service \
-  -p 3001:3001 \
-  --env-file .env \
-  auth-service:latest
+# Register
+curl -X POST http://localhost:3001/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "john@example.com",
+    "password": "password123"
+  }'
 
-# Run with Docker Compose
+# Login
+curl -X POST http://localhost:3001/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@example.com",
+    "password": "password123"
+  }'
+```
+
+#### Send Messages
+
+```bash
+# Get JWT token from login response
+TOKEN="your-jwt-token"
+
+# Send message
+curl -X POST http://localhost:3002/api/messages \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "text": "Hello from cURL!",
+    "roomId": "global"
+  }'
+
+# Get messages
+curl -X GET "http://localhost:3002/api/messages?roomId=global&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### WebSocket Testing
+
+```javascript
+// Browser console or Node.js
+const socket = io('http://localhost:3002', {
+  auth: { token: 'your-jwt-token' },
+});
+
+socket.on('connect', () => {
+  console.log('Connected!');
+
+  // Join global room
+  socket.emit('join:room', 'global');
+
+  // Send message
+  socket.emit('message:send', {
+    text: 'Hello from WebSocket!',
+    roomId: 'global',
+  });
+});
+
+socket.on('message:new', (message) => {
+  console.log('New message:', message);
+});
+```
+
+## 📊 Monitoring & Debugging
+
+### Service Health
+
+```bash
+# Check individual services
+curl http://localhost:3001/health | jq
+curl http://localhost:3002/health | jq
+
+# Via API Gateway
+curl http://localhost:8080/auth/health | jq
+curl http://localhost:8080/chat/health | jq
+```
+
+### Development Tools
+
+- **Kafka UI**: http://localhost:8081
+- **Redis Commander**: http://localhost:8082
+- **Auth API Docs**: http://localhost:3001/docs
+- **Chat API Docs**: http://localhost:3002/docs
+
+### Logs
+
+```bash
+# Service logs
+docker-compose logs -f auth-service
+docker-compose logs -f chat-service
+
+# All logs
+docker-compose logs -f
+```
+
+## 🔧 Configuration
+
+### Docker Profiles
+
+```bash
+# Basic services only
 docker-compose up -d
+
+# With development tools
+docker-compose --profile dev up -d
+
+# With API Gateway
+docker-compose --profile gateway up -d
+
+# Everything
+docker-compose --profile dev --profile gateway up -d
 ```
 
-## 📝 Environment Variables
+### Scaling Services
 
-| Variable                    | Description               | Default       | Required |
-| --------------------------- | ------------------------- | ------------- | -------- |
-| `PORT`                      | Service port              | `3001`        | No       |
-| `NODE_ENV`                  | Environment               | `development` | No       |
-| `DATABASE_URL`              | PostgreSQL connection URL | -             | Yes      |
-| `REDIS_URL`                 | Redis connection URL      | -             | Yes      |
-| `KAFKA_BROKER`              | Kafka broker address      | -             | Yes      |
-| `JWT_SECRET`                | JWT signing secret        | -             | Yes      |
-| `JWT_EXPIRES_IN`            | Token expiration time     | `24h`         | No       |
-| `LOG_LEVEL`                 | Winston log level         | `info`        | No       |
-| `ALLOWED_ORIGINS`           | CORS allowed origins      | -             | Yes      |
-| `SENTRY_DSN`                | Sentry DSN                | -             | No       |
-| `SENTRY_ENVIRONMENT`        | Sentry environment        | `development` | No       |
-| `SENTRY_SAMPLE_RATE`        | Error sampling rate       | `1.0`         | No       |
-| `SENTRY_TRACES_SAMPLE_RATE` | Transaction sampling      | `0.1`         | No       |
+```bash
+# Scale chat service
+docker-compose up -d --scale chat-service=3
 
-## 🏗️ Project Structure
-
+# Scale with load balancer
+docker-compose --profile gateway up -d --scale chat-service=3
 ```
-auth-service/
-├── src/
-│   ├── config/          # Configuration files
-│   │   ├── index.ts     # Config aggregator
-│   │   ├── logger.ts    # Winston logger
-│   │   ├── redis.ts     # Redis client
-│   │   ├── sentry.ts    # Sentry setup
-│   │   └── swagger.ts   # Swagger config
-│   ├── controllers/     # Request handlers
-│   ├── entity/          # TypeORM entities
-│   ├── events/          # Kafka events
-│   ├── middlewares/     # Express middlewares
-│   ├── routes/          # API routes
-│   ├── services/        # Business logic
-│   ├── types/           # TypeScript types
-│   ├── utils/           # Helper functions
-│   ├── app.ts          # Application entry
-│   ├── data-source.ts  # Database config
-│   └── init/           # Initialization
-├── .env.example        # Environment template
-├── .gitignore         # Git ignore rules
-├── .prettierrc        # Prettier config
-├── docker-compose.yml # Docker Compose
-├── Dockerfile         # Docker image
-├── eslint.config.js   # ESLint config
-├── package.json       # Dependencies
-├── README.md          # Documentation
-└── tsconfig.json      # TypeScript config
+
+## 🚀 Deployment
+
+### Production Checklist
+
+- [ ] Update JWT secrets
+- [ ] Configure proper database credentials
+- [ ] Set up SSL certificates
+- [ ] Configure Sentry DSN
+- [ ] Set up monitoring (Prometheus/Grafana)
+- [ ] Configure log aggregation
+- [ ] Set up backup strategies
+- [ ] Configure firewall rules
+- [ ] Set resource limits
+
+### Docker Production
+
+```bash
+# Production build
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# With SSL termination
+docker-compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
 ```
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License.
 
 ## 👨‍💻 Author
 
 **Ahmed Nasser**
 
-- GitHub: [@ahmednasser](https://github.com/ahmednasser111)
+- GitHub: [@ahmednasser111](https://github.com/ahmednasser111)
 - Email: ahmednaser7707@gmail.com
 
 ## 🆘 Support
 
-For issues and questions:
-
-- Create an issue in the GitHub repository
-- Contact the development team
-- Check the [API Documentation](http://localhost:3001/docs)
+- Create an issue for bugs/features
+- Check API documentation at `/docs` endpoints
+- Review logs for troubleshooting
+- Join our community discussions

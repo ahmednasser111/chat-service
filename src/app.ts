@@ -179,7 +179,7 @@ async function initializeServices() {
     logger.info('4/4 - Initializing Socket.IO...');
     const io = new Server(server, {
       cors: {
-        origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
+        origin: '*',
         credentials: true,
       },
       pingTimeout: 60000,

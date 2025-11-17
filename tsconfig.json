@@ -11,7 +11,7 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "typeRoots": ["./src/types", "./node_modules/@types"],
-    "moduleResolution": "node",
+    "moduleResolution": "classic",
     "emitDecoratorMetadata": true,
     "strictPropertyInitialization": false
   },

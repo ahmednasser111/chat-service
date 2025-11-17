@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2024",
-    "module": "commonjs",
+    "module": "nodenext",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -11,7 +11,7 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "typeRoots": ["./src/types", "./node_modules/@types"],
-    "moduleResolution": "classic",
+    "moduleResolution": "nodenext",
     "emitDecoratorMetadata": true,
     "strictPropertyInitialization": false
   },

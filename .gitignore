@@ -84,9 +84,6 @@ Thumbs.db
 # VSCode settings
 .vscode/
 
-# Yarn Integrity file
-yarn.lock
-
 # PM2 logs
 pids
 logs

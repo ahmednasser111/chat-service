@@ -20,11 +20,19 @@ interface TypingData {
   isTyping: boolean;
 }
 
+interface OnlineUserInfo {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+}
+
 export class SocketService {
   private io: Server;
   private kafkaService: KafkaService;
   private connectedUsers: Map<string, Set<string>> = new Map(); // userId -> Set<socketId>
   private userSockets: Map<string, string> = new Map(); // socketId -> userId
+  private userInfo: Map<string, OnlineUserInfo> = new Map(); // userId -> display info
 
   constructor(io: Server) {
     this.io = io;
@@ -50,6 +58,18 @@ export class SocketService {
         'USER_STATUS',
         this.handleUserStatus.bind(this),
       );
+      await RedisClient.subscribe(
+        'ROOM_CREATED',
+        this.handleRoomCreated.bind(this),
+      );
+      await RedisClient.subscribe(
+        'ROOM_UPDATED',
+        this.handleRoomUpdated.bind(this),
+      );
+      await RedisClient.subscribe(
+        'ROOM_DELETED',
+        this.handleRoomDeleted.bind(this),
+      );
 
       logger.info('Socket service subscribed to Redis channels');
     } catch (error) {
@@ -64,6 +84,14 @@ export class SocketService {
       // Track connected user
       if (socket.userId) {
         this.addUserSocket(socket.userId, socket.id);
+        if (socket.user) {
+          this.userInfo.set(socket.userId, {
+            id: socket.userId,
+            email: socket.user.email,
+            firstName: socket.user.firstName,
+            lastName: socket.user.lastName,
+          });
+        }
         this.broadcastUserStatus(socket.userId, 'online');
       }
 
@@ -94,6 +122,9 @@ export class SocketService {
           // Notify room members
           socket.to(`room:${roomId}`).emit('user:joined', {
             userId: socket.userId,
+            email: socket.user?.email,
+            firstName: socket.user?.firstName,
+            lastName: socket.user?.lastName,
             roomId,
             timestamp: new Date(),
           });
@@ -228,7 +259,9 @@ export class SocketService {
 
       // Handle get online users
       socket.on('users:online', () => {
-        const onlineUsers = Array.from(this.connectedUsers.keys());
+        const onlineUsers = Array.from(this.connectedUsers.keys()).map(
+          (id) => this.userInfo.get(id) ?? { id, email: id },
+        );
         socket.emit('users:online:list', { users: onlineUsers });
       });
 
@@ -291,6 +324,38 @@ export class SocketService {
     }
   }
 
+  // Rooms are global (not scoped to a single room), so broadcast to every connected client
+  // rather than `.to(room)` — everyone's room list should update, not just members.
+  private handleRoomCreated(message: string): void {
+    try {
+      const room = JSON.parse(message);
+      this.io.emit('room:created', room);
+      logger.debug(`Room creation broadcast: ${room.id}`);
+    } catch (error) {
+      logger.error('Error handling room creation from Redis:', error);
+    }
+  }
+
+  private handleRoomUpdated(message: string): void {
+    try {
+      const room = JSON.parse(message);
+      this.io.emit('room:updated', room);
+      logger.debug(`Room update broadcast: ${room.id}`);
+    } catch (error) {
+      logger.error('Error handling room update from Redis:', error);
+    }
+  }
+
+  private handleRoomDeleted(message: string): void {
+    try {
+      const data = JSON.parse(message);
+      this.io.emit('room:deleted', data);
+      logger.debug(`Room deletion broadcast: ${data.roomId}`);
+    } catch (error) {
+      logger.error('Error handling room deletion from Redis:', error);
+    }
+  }
+
   private handleUserStatus(message: string): void {
     try {
       const statusData = JSON.parse(message);
@@ -321,6 +386,7 @@ export class SocketService {
       userSockets.delete(socketId);
       if (userSockets.size === 0) {
         this.connectedUsers.delete(userId);
+        this.userInfo.delete(userId);
       }
     }
     this.userSockets.delete(socketId);

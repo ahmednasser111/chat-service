@@ -3,6 +3,7 @@ import AuthRequest from '../middleware/auth';
 import { logger } from '../utils/logger';
 import prisma from '../config/prisma';
 import { KafkaService } from '../services/kafka-service';
+import { RedisClient } from '../config/redis';
 
 export class RoomController {
   async createRoom(req: AuthRequest, res: Response): Promise<void> {
@@ -17,11 +18,12 @@ export class RoomController {
         },
       });
 
-      // Publish room created event
-      await KafkaService.getInstance().produceMessage('ROOM_CREATED', {
-        ...room,
-        createdBy: userId,
-      });
+      // Publish room created event — Kafka for persistence/other consumers, Redis so
+      // SocketService can broadcast it to connected clients in real time (same pattern as
+      // messages: socket.io only listens on Redis, not Kafka, for live updates).
+      const roomEvent = { ...room, createdBy: userId };
+      await KafkaService.getInstance().produceMessage('ROOM_CREATED', roomEvent);
+      await RedisClient.publish('ROOM_CREATED', JSON.stringify(roomEvent));
 
       logger.info(`Room created: ${room.id} by user: ${userId}`);
 
@@ -108,11 +110,10 @@ export class RoomController {
         },
       });
 
-      // Publish room updated event
-      await KafkaService.getInstance().produceMessage('ROOM_UPDATED', {
-        ...room,
-        updatedBy: userId,
-      });
+      // Publish room updated event (Kafka + Redis — see createRoom for why both)
+      const roomUpdatedEvent = { ...room, updatedBy: userId };
+      await KafkaService.getInstance().produceMessage('ROOM_UPDATED', roomUpdatedEvent);
+      await RedisClient.publish('ROOM_UPDATED', JSON.stringify(roomUpdatedEvent));
 
       logger.info(`Room updated: ${room.id} by user: ${userId}`);
 
@@ -147,12 +148,10 @@ export class RoomController {
         where: { id },
       });
 
-      // Publish room deleted event
-      await KafkaService.getInstance().produceMessage('ROOM_DELETED', {
-        roomId: id,
-        deletedBy: userId,
-        deletedAt: new Date(),
-      });
+      // Publish room deleted event (Kafka + Redis — see createRoom for why both)
+      const roomDeletedEvent = { roomId: id, deletedBy: userId, deletedAt: new Date() };
+      await KafkaService.getInstance().produceMessage('ROOM_DELETED', roomDeletedEvent);
+      await RedisClient.publish('ROOM_DELETED', JSON.stringify(roomDeletedEvent));
 
       logger.info(`Room deleted: ${id} by user: ${userId}`);
 

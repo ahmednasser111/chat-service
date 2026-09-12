@@ -1,5 +1,4 @@
-import { Socket } from 'socket.io';
-import { ExtendedError } from 'socket.io/dist/namespace';
+import { Socket, ExtendedError } from 'socket.io';
 import { logger } from '../utils/logger';
 import { verifyToken } from './auth';
 

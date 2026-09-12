@@ -18,5 +18,7 @@ RUN yarn build
 # Expose the service port
 EXPOSE 3002
 
-# Start the service
-CMD ["node", "dist/index.js"]
+# Apply pending Prisma migrations against the runtime DATABASE_URL (unavailable at build
+# time), then start. `prisma generate` above only builds the client, it doesn't touch the
+# database — without this the app boots against a database with no tables.
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
